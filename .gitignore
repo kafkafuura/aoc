@@ -1,0 +1,12 @@
+**/*.cmi
+**/*.cmo
+**/*.cmx
+**/*.exe
+**/*.elf
+**/*.dll
+**/*.txt
+**/*.o
+**/*.pdb
+**/*_opt.ml
+**/*_aux.ml
+**/*.png
