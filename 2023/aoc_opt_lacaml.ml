@@ -76,7 +76,7 @@ let problem_24b () =
   let (a,b) = HailXYZ.hail_mary_matrix input.(0) input.(1) input.(2) in
   let (a_mat, b_vec) = (convert_mat a, convert_vec b) in
   solve a_mat b_vec;
-  for i = 1 to Bigarray.Array2.dim1 b_vec |> pred do Printf.printf "%20.0f" b_vec.{i,1} ; print_newline () done;
+  for i = 1 to Bigarray.Array2.dim1 b_vec do Printf.printf "%20.0f" b_vec.{i,1} ; print_newline () done;
   Printf.printf "%20.0f\n" @@ b_vec.{1,1} +. b_vec.{2,1} +. b_vec.{3,1}
   
 (*

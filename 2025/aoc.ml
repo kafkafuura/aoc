@@ -138,10 +138,46 @@ let problem_02b () =
  (fun s ->
   let dash = String.index s '-' in
   (int_of_string @@ String.sub s 0 dash), (int_of_string @@ String.sub s (dash+1) (String.length s - dash - 1))) |>
- List.map (fun x -> x |> find_invalid_all) |>
+ List.map find_invalid_all |>
  List.fold_left ISet.union ISet.empty |>
  Fun.flip (ISet.fold (+)) 0
 (*
   (* print rather than sum, to check against example *)
   ISet.iter (Printf.printf "%d\n")
 *)
+
+(* find left-most highest number and scan right for highest second number *)
+let problem_03a () =
+ let example = false in
+ let joltage line =
+  let (lmax, imax, _) =
+   String.sub line 0 (String.length line - 1) |>
+   String.fold_left
+   (fun (cmax,imax,i) c -> if c > cmax then (c,i,i+1) else (cmax,imax,i+1)) ('\x00', (-1), 0) in
+  let rmax =
+   String.sub line (imax+1) (String.length line - imax - 1) |>
+   String.fold_left max '\x00' in
+  (Char.code lmax - 0x30) * 10 + (Char.code rmax - 0x30) in
+ In_channel.(with_open_bin (if example then "03e.txt" else "03.txt") input_lines) |>
+ List.map joltage |>
+ List.fold_left (+) 0
+
+(* 2 -> 12 ; try generalizing to n *)
+let problem_03b () =
+ let example = false in
+ let limit = 12 in
+
+ let rec joltage_n n a line =
+  if n = 0 then a else
+  let (cmax, imax, _) =
+   String.sub line 0 (String.length line - (n-1)) |>
+   String.fold_left
+   (fun (cmax,imax,i) c -> if c > cmax then (c,i,i+1) else (cmax,imax,i+1)) ('\x00', (-1), 0) in
+  let a' = (a * 10 + (Char.code cmax - 0x30)) in
+  if n = 1 then a' else
+  joltage_n (n-1) a' (String.sub line (imax+1) (String.length line - imax - 1)) in
+
+ In_channel.(with_open_bin (if example then "03e.txt" else "03.txt") input_lines) |>
+ List.map (joltage_n limit 0) |>
+ List.fold_left (+) 0
+

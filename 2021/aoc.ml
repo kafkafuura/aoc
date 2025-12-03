@@ -1,7 +1,5 @@
 (* Advent of Code 2021 *)
 
-let int_of_string s = Scanf.sscanf s "%d" (Fun.id)
-
 let p1_1 () =
  let ic = open_in "01-1.txt" in
  let cnt = ref 0 and last = ref 0 in
