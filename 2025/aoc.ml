@@ -249,5 +249,45 @@ let problem_04b () =
     then (input.(y).%[x] <- '.' ; incr res)
    done
   done ;
-  (if !res = 0 then Fun.id else loop [@tailcall]) (!res+a) in
+  if !res = 0 then a else (loop [@tailcall]) (!res+a) in
  loop 0
+
+(* optimized version *)
+(* faster in bytecode, same optimized *)
+let problem_04b2 () =
+ let example = false in
+ let input = In_channel.(with_open_bin (if example then "04e.txt" else "04.txt") input_lines) |> Array.of_list in
+ let h = Array.length input in
+ let w = String.length input.(0) in
+
+ let adj y x =
+  [y-1,x-1; y-1,x; y-1,x+1
+  ;y  ,x-1;        y  ,x+1
+  ;y+1,x-1; y+1,x; y+1,x+1] |>
+  List.fold_left
+  (fun a (y,x) -> if y >= 0 && y < h && x >= 0 && x < w && input.(y).[x] = '@' then succ a else a) 0 in
+
+ let adj_cache = Array.make_matrix h w 0 in
+ let q = Queue.create () in
+
+ (* build cache *)
+ for y = 0 to h - 1 do
+  for x = 0 to w - 1 do
+   if input.(y).[x] = '@' then
+   let a = adj y x in
+   let _ = adj_cache.(y).(x) <- a in
+   if a < 4 then Queue.push (y,x) q
+  done
+ done;
+
+ let removed = ref 0 in
+ while not @@ Queue.is_empty q do
+  let (y,x) = Queue.take q in
+  incr removed ;
+  [y-1,x-1; y-1,x; y-1,x+1
+  ;y  ,x-1;        y  ,x+1
+  ;y+1,x-1; y+1,x; y+1,x+1] |>
+  List.filter (fun (y,x) -> y >= 0 && y < h && x >= 0 && x < w && input.(y).[x] = '@') |>
+  List.iter (fun (y,x) -> adj_cache.(y).(x) <- adj_cache.(y).(x) - 1 ; if adj_cache.(y).(x) = 3 then Queue.add (y,x) q)
+ done ;
+ !removed
