@@ -181,3 +181,73 @@ let problem_03b () =
  List.map (joltage_n limit 0) |>
  List.fold_left (+) 0
 
+(* use slices to avoid allocating substrings *)
+(* no faster than problem_03b when compiled *)
+let problem_03b2 () =
+ let example = false in
+ let limit = 12 in
+
+ let rec fold_left_slice f a (s,i,len) =
+  if len = 0 then a else fold_left_slice f (f a s.[i]) (s,i+1,len-1) in
+
+ let rec joltage_n n a (line,i,len) =
+  if n <= 0 then a else
+  let (cmax, imax, _) =
+   fold_left_slice
+    (fun (cmax,imax,i) c -> if c > cmax then (c,i,i+1) else (cmax,imax,i+1))
+    ('\x00', (-1), 0)
+    (line, i, len - (n-1)) in
+  let a' = (a * 10 + (Char.code cmax - 0x30)) in
+  if n = 1 then a' else
+  joltage_n (n-1) a' (line,i+imax+1,len-imax-1) in
+
+ In_channel.(with_open_bin (if example then "03e.txt" else "03.txt") input_lines) |>
+ List.map (fun s -> joltage_n limit 0 (s,0,String.length s)) |>
+ List.fold_left (+) 0
+
+let problem_04a () =
+ let example = false in
+ let input = In_channel.(with_open_bin (if example then "04e.txt" else "04.txt") input_lines) |> Array.of_list in
+ let h = Array.length input in
+ let w = String.length input.(0) in
+ let adj y x =
+  [y-1,x-1; y-1,x; y-1,x+1
+  ;y  ,x-1;        y  ,x+1
+  ;y+1,x-1; y+1,x; y+1,x+1] |>
+  List.fold_left
+  (fun a (y,x) -> if y >= 0 && y < h && x >= 0 && x < w && input.(y).[x] = '@' then succ a else a) 0 in
+ let res = ref 0 in
+ for y = 0 to h - 1 do
+  for x = 0 to w - 1 do
+   if input.(y).[x] = '@' && adj y x < 4
+   then incr res
+  done
+ done ;
+ !res
+
+let problem_04b () =
+ let example = false in
+ let (.%[]) = Bytes.get in
+ let (.%[]<-) = Bytes.set in
+ let input = In_channel.(with_open_bin (if example then "04e.txt" else "04.txt") input_lines) |>
+  List.map (Bytes.unsafe_of_string) |> Array.of_list in
+ let h = Array.length input in
+ let w = Bytes.length input.(0) in
+ let adj y x =
+  [y-1,x-1; y-1,x; y-1,x+1
+  ;y  ,x-1;        y  ,x+1
+  ;y+1,x-1; y+1,x; y+1,x+1] |>
+  List.fold_left
+  (fun a (y,x) -> if y >= 0 && y < h && x >= 0 && x < w && input.(y).%[x] = '@' then succ a else a) 0 in
+
+ (* it is more efficient to 'change as we go' instead of buffer swapping in this instance *)
+ let rec loop a =
+  let res = ref 0 in
+  for y = 0 to h - 1 do
+   for x = 0 to w - 1 do
+    if input.(y).%[x] = '@' && adj y x < 4
+    then (input.(y).%[x] <- '.' ; incr res)
+   done
+  done ;
+  (if !res = 0 then Fun.id else loop [@tailcall]) (!res+a) in
+ loop 0
