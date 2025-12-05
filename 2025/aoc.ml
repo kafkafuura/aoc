@@ -291,3 +291,65 @@ let problem_04b2 () =
   List.iter (fun (y,x) -> adj_cache.(y).(x) <- adj_cache.(y).(x) - 1 ; if adj_cache.(y).(x) = 3 then Queue.add (y,x) q)
  done ;
  !removed
+
+(* ranges can overlap! *)
+(* probably want to combine ranges, but let's do a simple search first *)
+let problem_05a () =
+ let example = false in
+ let input = In_channel.(with_open_bin (if example then "05e.txt" else "05.txt") input_lines) |> Array.of_list in
+ let midpoint = Array.find_index ((=)"") input |> Option.get in
+ let ranges =
+  Array.sub input 0 midpoint |>
+  Array.map (fun s ->
+   let midpoint = String.index s '-' in
+   let low = int_of_string @@ String.sub s 0 midpoint in
+   let high = int_of_string @@ String.sub s (midpoint+1) (String.length s - midpoint - 1) in
+   low,high) in
+ let ids =
+  Array.sub input (midpoint+1) (Array.length input - midpoint - 1) |>
+  Array.map (int_of_string) in
+
+ (* pre-sort to guarantee some assumptions and reduce redundancy *)
+ Array.sort compare ids ;
+ Array.sort compare ranges ;
+
+ let rec loop a i j =
+  if j >= Array.length ids then a else
+  if i >= Array.length ranges then a else
+  let (rmin,rmax) = ranges.(i) in
+  if ids.(j) >= rmin && ids.(j) <= rmax then loop (a+1) i (j+1) else
+  if ids.(j) < rmin then loop a i (j+1) else
+  loop a (i+1) j
+ in
+
+ loop 0 0 0
+
+(* guess what? this one is about combining ranges! *)
+let problem_05b () =
+ let example = false in
+ let input = In_channel.(with_open_bin (if example then "05e.txt" else "05.txt") input_lines) |> Array.of_list in
+ let midpoint = Array.find_index ((=)"") input |> Option.get in
+ let ranges =
+  Array.sub input 0 midpoint |>
+  Array.map (fun s ->
+   let midpoint = String.index s '-' in
+   let low = int_of_string @@ String.sub s 0 midpoint in
+   let high = int_of_string @@ String.sub s (midpoint+1) (String.length s - midpoint - 1) in
+   low,high) in
+
+ Array.sort compare ranges ;
+
+ (* create a list of only disjoint ranges! *)
+ (* because we've presorted we can make some assumptions: e.g., min0 <= min1 *)
+ let rec loop a i =
+  if i >= Array.length ranges then a else
+  match a with
+  | [] -> loop (ranges.(i) :: []) (i+1)
+  | (min0,max0) :: tl ->
+    let (min1,max1) = ranges.(i) in
+    if min1 > max0 + 1 then loop (ranges.(i)::a) (i+1)
+    else loop ((min0, max max0 max1)::tl) (i+1)
+  in
+
+ loop [] 0 |>
+ List.fold_left (fun a (rmin,rmax) -> a + rmax - rmin + 1) 0
