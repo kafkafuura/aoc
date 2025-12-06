@@ -80,7 +80,7 @@ let problem_02a () =
   input |>
   List.map (fun x -> x |> find_invalid |> sum_invalid) |>
   List.fold_left (+) 0
- 
+
 let problem_02b () =
  let example = false in
 
@@ -131,7 +131,7 @@ let problem_02b () =
    Seq.ints 2 |> Seq.take_while ((>=)dhigh) |>
    Seq.filter_map (fun n -> find_invalid_n n (low, high) |> Option.map (fun (ilow,ihigh) -> (n,ilow,ihigh))) in
   Seq.fold_left collect_invalid_n ISet.empty ranges in
-  
+
  In_channel.(with_open_bin (if example then "02e.txt" else "02.txt") input_line) |> Option.get |>
  String.split_on_char ',' |>
  List.map
@@ -341,15 +341,106 @@ let problem_05b () =
 
  (* create a list of only disjoint ranges! *)
  (* because we've presorted we can make some assumptions: e.g., min0 <= min1 *)
- let rec loop a i =
-  if i >= Array.length ranges then a else
-  match a with
-  | [] -> loop (ranges.(i) :: []) (i+1)
-  | (min0,max0) :: tl ->
-    let (min1,max1) = ranges.(i) in
-    if min1 > max0 + 1 then loop (ranges.(i)::a) (i+1)
-    else loop ((min0, max max0 max1)::tl) (i+1)
-  in
+ (* generic loop can be collapsed into a simpler fold *)
 
- loop [] 0 |>
+ Array.fold_left
+  (fun a (min1, max1) ->
+   match a with [] -> (min1, max1)::a | (min0, max0)::tl ->
+   if min1 > max0 + 1 then (min1, max1)::a
+   else (min0, max max0 max1)::tl) [] ranges |>
+
  List.fold_left (fun a (rmin,rmax) -> a + rmax - rmin + 1) 0
+
+let problem_06a () =
+ let example = false in
+ let input =
+  In_channel.(with_open_bin (if example then "06e.txt" else "06.txt") input_lines) |>
+  List.map
+   (fun s ->
+    s |> String.split_on_char ' ' |> List.filter ((<>)"") |>
+    List.map (fun s -> if s.[0] = '+' then (-1) else if s.[0] = '*' then (-2) else int_of_string s) |>
+    Array.of_list) |>
+  Array.of_list in
+  let fold_of_n = function
+   | -1 -> Seq.fold_left ( + ) 0
+   | -2 -> Seq.fold_left ( * ) 1
+   | _ -> raise_notrace (Invalid_argument "Invalid OpNum") in
+
+ let h = Array.length input in
+ let w = Array.length input.(0) in
+
+ Seq.ints 0 |> Seq.take w |>
+ Seq.map
+ (fun x ->
+  Seq.ints 0 |> Seq.take (h-1) |>
+  Seq.map (fun y -> input.(y).(x)) |>
+  fold_of_n (input.(h-1).(x))) |>
+ Seq.fold_left (+) 0
+
+(* transpose as you go solution, accumulate in chunks *)
+let problem_06b () =
+ let example = false in
+ let input = In_channel.(with_open_bin (if example then "06e.txt" else "06.txt") input_lines) |> Array.of_list in
+
+ let h = Array.length input in
+ let w = String.length input.(0) in
+
+ let fold_of_c = function
+  | '+' -> List.fold_left ( + ) 0
+  | '*' -> List.fold_left ( * ) 1
+  | _ -> raise_notrace (Invalid_argument "Invalid OpNum") in
+
+ let sbuf = Buffer.create (h+1) in
+
+ Seq.ints 0 |> Seq.take w |>
+ Seq.fold_left
+ (fun (res,nbuf,a) x ->
+  let a = if Option.is_none a then Some input.(h-1).[x] else a in
+  Buffer.clear sbuf ;
+  for y = 0 to h - 2 do Buffer.add_char sbuf input.(y).[x] done ;
+  match int_of_string_opt (String.trim (Buffer.contents sbuf)) with
+  | Some n -> res,n :: nbuf, a
+  | None -> fold_of_c (Option.get a) nbuf :: res, [], None)
+  ([], [], None) |>
+ (* final step *)
+ (fun (res,nbuf,a) -> (fold_of_c (Option.get a) nbuf) :: res) |>
+ (* fold for answer *)
+ List.fold_left (+) 0
+
+(* pre-transpose, accumulate as you go *)
+let problem_06b2() =
+ let example = false in
+ let input = In_channel.(with_open_bin (if example then "06e.txt" else "06.txt") input_lines) |> Array.of_list in
+
+ let h = Array.length input in
+ let w = String.length input.(0) in
+
+ let ops = input.(h-1) in
+
+ (* transpose and shadow *)
+ let input =
+  let sbuf = Buffer.create 8 in
+  let input' = Array.make w None in
+  for x = 0 to w - 1 do
+   Buffer.clear sbuf ;
+   for y = 0 to h - 2 do Buffer.add_char sbuf input.(y).[x] done ;
+   input'.(x) <- (sbuf |> Buffer.contents |> String.trim |> int_of_string_opt)
+  done ;
+  input' in
+
+ Seq.zip (String.to_seq ops) (Array.to_seq input) |>
+ (* the fold *)
+ Seq.fold_left
+ (fun (res,a,op) (c,n) ->
+  let (a,op) =
+   match op with
+   (* reset mini-accumulator *)
+   | None -> if c = '+' then (0, Some ( + )) else (1, Some ( * ))
+   | _ -> (a,op) in
+  match n with
+   (* add to result and queue mini-accumulator reset *)
+  | None -> (a+res, 0, None)
+  | Some n -> (res, (Option.get op) a n, op))
+ (0,0,None) |>
+ (* final step *)
+ (fun (res,a,_) -> res+a)
