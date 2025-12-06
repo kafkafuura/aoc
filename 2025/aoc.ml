@@ -377,70 +377,24 @@ let problem_06a () =
   fold_of_n (input.(h-1).(x))) |>
  Seq.fold_left (+) 0
 
-(* transpose as you go solution, accumulate in chunks *)
 let problem_06b () =
  let example = false in
  let input = In_channel.(with_open_bin (if example then "06e.txt" else "06.txt") input_lines) |> Array.of_list in
 
  let h = Array.length input in
  let w = String.length input.(0) in
+ let sbuf = Buffer.create h in
 
- let fold_of_c = function
-  | '+' -> List.fold_left ( + ) 0
-  | '*' -> List.fold_left ( * ) 1
-  | _ -> raise_notrace (Invalid_argument "Invalid OpNum") in
-
- let sbuf = Buffer.create (h+1) in
-
- Seq.ints 0 |> Seq.take w |>
+ (* right-to-left traversal, as intended, works w/o extra column of blanks *)
+ Seq.init w (fun i -> w - i - 1) |>
  Seq.fold_left
- (fun (res,nbuf,a) x ->
-  let a = if Option.is_none a then Some input.(h-1).[x] else a in
+ (fun (res,nbuf) x ->
   Buffer.clear sbuf ;
-  for y = 0 to h - 2 do Buffer.add_char sbuf input.(y).[x] done ;
-  match int_of_string_opt (String.trim (Buffer.contents sbuf)) with
-  | Some n -> res,n :: nbuf, a
-  | None -> fold_of_c (Option.get a) nbuf :: res, [], None)
-  ([], [], None) |>
- (* final step *)
- (fun (res,nbuf,a) -> (fold_of_c (Option.get a) nbuf) :: res) |>
- (* fold for answer *)
- List.fold_left (+) 0
-
-(* pre-transpose, accumulate as you go *)
-let problem_06b2() =
- let example = false in
- let input = In_channel.(with_open_bin (if example then "06e.txt" else "06.txt") input_lines) |> Array.of_list in
-
- let h = Array.length input in
- let w = String.length input.(0) in
-
- let ops = input.(h-1) in
-
- (* transpose and shadow *)
- let input =
-  let sbuf = Buffer.create 8 in
-  let input' = Array.make w None in
-  for x = 0 to w - 1 do
-   Buffer.clear sbuf ;
-   for y = 0 to h - 2 do Buffer.add_char sbuf input.(y).[x] done ;
-   input'.(x) <- (sbuf |> Buffer.contents |> String.trim |> int_of_string_opt)
-  done ;
-  input' in
-
- Seq.zip (String.to_seq ops) (Array.to_seq input) |>
- (* the fold *)
- Seq.fold_left
- (fun (res,a,op) (c,n) ->
-  let (a,op) =
-   match op with
-   (* reset mini-accumulator *)
-   | None -> if c = '+' then (0, Some ( + )) else (1, Some ( * ))
-   | _ -> (a,op) in
-  match n with
-   (* add to result and queue mini-accumulator reset *)
-  | None -> (a+res, 0, None)
-  | Some n -> (res, (Option.get op) a n, op))
- (0,0,None) |>
- (* final step *)
- (fun (res,a,_) -> res+a)
+  for y = 0 to h - 2 do if input.(y).[x] <> ' ' then Buffer.add_char sbuf input.(y).[x] done ;
+  match int_of_string_opt (Buffer.contents sbuf) with
+  | Some n when input.(h-1).[x] = '+' -> res + (List.fold_left ( + ) 0 (n::nbuf)), []
+  | Some n when input.(h-1).[x] = '*' -> res + (List.fold_left ( * ) 1 (n::nbuf)), []
+  | Some n -> res, n::nbuf
+  | None -> res, [])
+ (0, []) |>
+ fst
