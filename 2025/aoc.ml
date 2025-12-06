@@ -356,26 +356,38 @@ let problem_06a () =
  let input =
   In_channel.(with_open_bin (if example then "06e.txt" else "06.txt") input_lines) |>
   List.map
-   (fun s ->
-    s |> String.split_on_char ' ' |> List.filter ((<>)"") |>
-    List.map (fun s -> if s.[0] = '+' then (-1) else if s.[0] = '*' then (-2) else int_of_string s) |>
+   (fun s -> s |>
+    String.split_on_char ' ' |>
+    List.filter ((<>)"") |>
+    List.map
+    (fun s ->
+     (* encode op as negative int *)
+     if s.[0] = '+' then (-1) else
+     if s.[0] = '*' then (-2) else
+     int_of_string s) |>
     Array.of_list) |>
   Array.of_list in
-  let fold_of_n = function
-   | -1 -> Seq.fold_left ( + ) 0
-   | -2 -> Seq.fold_left ( * ) 1
-   | _ -> raise_notrace (Invalid_argument "Invalid OpNum") in
+
+ (* decode op *)
+ let fold_of_op = function
+  | -1 -> Seq.fold_left ( + ) 0
+  | -2 -> Seq.fold_left ( * ) 1
+  | _ -> assert false in
 
  let h = Array.length input in
  let w = Array.length input.(0) in
 
- Seq.ints 0 |> Seq.take w |>
- Seq.map
- (fun x ->
-  Seq.ints 0 |> Seq.take (h-1) |>
+ (* shadow to cleanup fold *)
+ let ops = input.(h-1) in
+ let h = h - 1 in
+
+ Seq.init w Fun.id |>
+ Seq.fold_left
+ (fun a x ->
+  Seq.init h Fun.id |>
   Seq.map (fun y -> input.(y).(x)) |>
-  fold_of_n (input.(h-1).(x))) |>
- Seq.fold_left (+) 0
+  fold_of_op (ops.(x)) |>
+  (+) a) 0
 
 let problem_06b () =
  let example = false in
