@@ -486,8 +486,7 @@ let problem_07b () =
 
  dfs (0,start)
 
-(* this version uses an array cache; probably faster, possibly more space efficient, even with <50% cell use *)
-(* you could use a triangular cache to save space, but I doubt it is worth the effort *)
+(* this "faster" version uses a flat array cache, with cursed isosceles-triangular indexing *)
 let problem_07b2 () =
  let example = false in
  let module ISet = Set.Make(Int) in
@@ -510,14 +509,16 @@ let problem_07b2 () =
   in loop [] input |> Array.of_list in
 
  let max_depth = Array.length splitters - 1 in
- let cache = Array.make_matrix (max_depth+1) (start+max_depth+1) (-1) in
+ let[@inline] idx_of_yx (y,x) = y * y + (x + y - start) in
+ let cache = Array.make ((max_depth+1)*(max_depth+1)) (-1) in
+
  let rec dfs (depth,x) =
   if depth > max_depth then 1 else
-  if cache.(depth).(x) >= 0 then cache.(depth).(x) else
+  if cache.(idx_of_yx (depth,x)) >= 0 then cache.(idx_of_yx (depth,x)) else
    let res =
     if not @@ ISet.mem x splitters.(depth)
     then dfs (depth+1,x)
     else dfs (depth+1,x-1) + dfs (depth+1,x+1) in
-   (cache.(depth).(x) <- res; res) in
+   (cache.(idx_of_yx (depth,x)) <- res; res) in
 
  dfs (0,start)
