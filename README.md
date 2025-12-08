@@ -36,7 +36,7 @@ All F# solutions are meant to be run through the REPL. (dotnet fsi -> #load "aoc
 
 ## 2025
 
-- OCaml: 01-06
+- OCaml: 01-07
 
 ## 2024
 

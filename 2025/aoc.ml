@@ -410,3 +410,114 @@ let problem_06b () =
   | None -> res, [])
  (0, []) |>
  fst
+
+(* splitter *)
+(* only 0-indexed even lines contain ^s *)
+(* merging beams do not count twice *)
+let problem_07a () =
+ let example = false in
+ let module ISet = Set.Make(Int) in
+ let input = In_channel.(with_open_bin (if example then "07e.txt" else "07.txt") input_lines) in
+
+ let (start, input) =
+  match input with
+  | [] -> assert false
+  | line0::tl ->
+    (String.index line0 'S', List.tl tl) in
+
+ (* custom fold to skip empty lines *)
+ let splitters =
+  let rec loop a = function
+  | hd::_::tl | hd::tl ->
+    (* messy because String.fold_lefti is not a stdlib function *)
+    loop ((String.fold_left (fun (a,i) c -> if c = '^' then ISet.add i a, i+1 else a, i+1) (ISet.empty,0) hd |> fst)::a) tl
+  | [] -> List.rev a
+  in loop [] input in
+
+ let update (count,beams) splitters =
+  let contacts = ISet.inter beams splitters in
+  let left_split = ISet.map ((+) 1) contacts in
+  let right_split = ISet.map (Fun.flip (-) 1) contacts in
+  let count = count + ISet.cardinal contacts in
+  let beams =
+   ISet.diff beams contacts |>
+   ISet.union left_split |>
+   ISet.union right_split in
+  (count, beams) in
+
+ List.fold_left update (0, ISet.singleton start) splitters |> fst
+
+(* this time, overlaps do count *)
+let problem_07b () =
+ let example = false in
+ let module ISet = Set.Make(Int) in
+ (* using an array for caching would probably be faster, but this also works *)
+ let module YXMap = Map.Make(struct type t = int * int let compare = compare end) in
+ let input = In_channel.(with_open_bin (if example then "07e.txt" else "07.txt") input_lines) in
+
+ let (start, input) =
+  match input with
+  | [] -> assert false
+  | line0::tl ->
+    (String.index line0 'S', List.tl tl) in
+
+ (* custom fold to skip empty lines *)
+ (* + arrayify for index access *)
+ let splitters =
+  let rec loop a = function
+  | hd::_::tl | hd::tl ->
+    (* messy because String.fold_lefti is not a stdlib function *)
+    loop ((String.fold_left (fun (a,i) c -> if c = '^' then ISet.add i a, i+1 else a, i+1) (ISet.empty,0) hd |> fst)::a) tl
+  | [] -> List.rev a
+  in loop [] input |> Array.of_list in
+
+ let max_depth = Array.length splitters - 1 in
+ let cache = ref YXMap.empty in
+ let rec dfs (depth,x) =
+  if depth > max_depth then 1 else
+  match YXMap.find_opt (depth,x) !cache with
+  | Some n -> n
+  | None ->
+    let res =
+     if not @@ ISet.mem x splitters.(depth)
+     then dfs (depth+1,x)
+     else dfs (depth+1,x-1) + dfs (depth+1,x+1) in
+    cache := YXMap.add (depth,x) res !cache; res in
+
+ dfs (0,start)
+
+(* this version uses an array cache; probably faster, possibly more space efficient, even with <50% cell use *)
+(* you could use a triangular cache to save space, but I doubt it is worth the effort *)
+let problem_07b2 () =
+ let example = false in
+ let module ISet = Set.Make(Int) in
+ let input = In_channel.(with_open_bin (if example then "07e.txt" else "07.txt") input_lines) in
+
+ let (start, input) =
+  match input with
+  | [] -> assert false
+  | line0::tl ->
+    (String.index line0 'S', List.tl tl) in
+
+ (* custom fold to skip empty lines *)
+ (* + arrayify for index access *)
+ let splitters =
+  let rec loop a = function
+  | hd::_::tl | hd::tl ->
+    (* messy because String.fold_lefti is not a stdlib function *)
+    loop ((String.fold_left (fun (a,i) c -> if c = '^' then ISet.add i a, i+1 else a, i+1) (ISet.empty,0) hd |> fst)::a) tl
+  | [] -> List.rev a
+  in loop [] input |> Array.of_list in
+
+ let max_depth = Array.length splitters - 1 in
+ let cache = Array.make_matrix (max_depth+1) (start+max_depth+1) (-1) in
+ let rec dfs (depth,x) =
+  if depth > max_depth then 1 else
+  if cache.(depth).(x) >= 0 then cache.(depth).(x) else
+   let res =
+    if not @@ ISet.mem x splitters.(depth)
+    then dfs (depth+1,x)
+    else dfs (depth+1,x-1) + dfs (depth+1,x+1) in
+   (cache.(depth).(x) <- res; res) in
+
+ dfs (0,start)
