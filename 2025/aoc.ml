@@ -522,3 +522,135 @@ let problem_07b2 () =
    (cache.(idx_of_yx (depth,x)) <- res; res) in
 
  dfs (0,start)
+
+(* use Pqueue (MinHeap) to reduce sorting requirements *)
+let problem_08a () =
+ let example = false in
+ let (.%()) = Dynarray.get in
+ let (.%()<-) = Dynarray.set in
+ let max_n = if example then 10 else 1000 in
+
+ let input =
+  In_channel.(with_open_bin (if example then "08e.txt" else "08.txt") input_lines) |>
+  List.map (fun s -> Scanf.sscanf s "%d,%d,%d" (fun a b c -> a,b,c)) |>
+  Array.of_list in
+
+ (* no need to sqrt *)
+ let d2 (x0,y0,z0) (x1,y1,z1) =
+   (x0 - x1) * (x0 - x1) +
+   (y0 - y1) * (y0 - y1) +
+   (z0 - z1) * (z0 - z1) in
+
+ (* use can use an array of size (len * (len - 1) / 2) and sort once, but heaps are better suited to this *)
+ let module Heap = Pqueue.MakeMin(struct type t = int * int * int let compare = compare end) in
+ let dcache = Heap.create () in
+
+ let len = Array.length input in
+ for y = 0 to len - 2 do
+  for x = y + 1 to len - 1 do
+   Heap.add dcache (d2 input.(y) input.(x), y, x) ;
+  done
+ done ;
+
+ let module ISet = Set.Make(Int) in
+ let circuits = Dynarray.create () in
+
+ (* this counts only meaningful operations; the solution uses i, not count, so this can be removed *)
+ let count = ref 0 in
+ (* this counts meaningful and nop operations *)
+ let i = ref 0 in
+
+ while !i < max_n do
+  let (_,a,b) = Heap.pop_min dcache |> Option.get in incr i; incr count ;
+  (match
+    Dynarray.find_index (ISet.mem a) circuits,
+    Dynarray.find_index (ISet.mem b) circuits
+   with
+   | None, None -> Dynarray.add_last circuits (ISet.of_list [a;b])
+   | Some idx, None -> circuits.%(idx) <- ISet.add b circuits.%(idx)
+   | None, Some idx -> circuits.%(idx) <- ISet.add a circuits.%(idx)
+   | Some idx0, Some idx1 when idx0 = idx1 -> decr count (* nothing happens, reverse incr count *)
+   | Some idx0, Some idx1 ->
+     let idx0 = min idx0 idx1
+     and idx1 = max idx0 idx1 in
+     circuits.%(idx0) <- ISet.union circuits.%(idx0) circuits.%(idx1) ;
+     if idx1 = Dynarray.length circuits - 1
+     then Dynarray.remove_last circuits
+     else circuits.%(idx1) <- Dynarray.pop_last circuits)
+ done ;
+
+ let top = Dynarray.create () in
+
+ Dynarray.to_seq circuits |>
+ Seq.map ISet.cardinal |>
+ Seq.iter
+  (fun n ->
+   if Dynarray.length top < 3 then Dynarray.add_last top n else
+   let (idx,_,_) = Dynarray.fold_left (fun (idx,a,i) x -> if x < a then (i,x,i+1) else (idx,a,i+1)) (-1,n,0) top in
+   if idx >= 0 then top.%(idx) <- n else ()) ;
+
+ Dynarray.fold_left ( * ) 1 top
+
+(* use heap to reduce sorting *)
+(* 225ms (heap) vs. 570ms (full sorting) *)
+let problem_08b () =
+ let example = false in
+ let debug = false in
+ let (.%()) = Dynarray.get in
+ let (.%()<-) = Dynarray.set in
+
+ let input =
+  In_channel.(with_open_bin (if example then "08e.txt" else "08.txt") input_lines) |>
+  List.map (fun s -> Scanf.sscanf s "%d,%d,%d" (fun a b c -> a,b,c)) |>
+  Array.of_list in
+
+ (* no need to sqrt *)
+ let d2 (x0,y0,z0) (x1,y1,z1) =
+   (x0 - x1) * (x0 - x1) +
+   (y0 - y1) * (y0 - y1) +
+   (z0 - z1) * (z0 - z1) in
+
+ (* use can use an array of size (len * (len - 1) / 2) and sort once, but heaps are better suited to this *)
+ let module Heap = Pqueue.MakeMin(struct type t = int * int * int let compare = compare end) in
+ let dcache = Heap.create () in
+
+ let len = Array.length input in
+ for y = 0 to len - 2 do
+  for x = y+1 to len - 1 do
+   Heap.add dcache (d2 input.(y) input.(x), y, x) ;
+  done
+ done ;
+
+ let module ISet = Set.Make(Int) in
+ let circuits = Dynarray.create () in
+
+ (* this counts only meaningful operations *)
+ let count = ref 0 in
+ let last_a = ref (-1) in
+ let last_b = ref (-1) in
+
+ (* you require len - 1 meaningful connections to do a final merge *)
+ while !count < Array.length input - 1 do
+  let (_,a,b) = Heap.pop_min dcache |> Option.get in incr count ;
+  last_a := a ; last_b := b ;
+  (match
+    Dynarray.find_index (ISet.mem a) circuits,
+    Dynarray.find_index (ISet.mem b) circuits
+   with
+   | None, None -> Dynarray.add_last circuits (ISet.of_list [a;b])
+   | Some idx, None -> circuits.%(idx) <- ISet.add b circuits.%(idx)
+   | None, Some idx -> circuits.%(idx) <- ISet.add a circuits.%(idx)
+   | Some idx0, Some idx1 when idx0 = idx1 -> decr count (* nothing happens, reverse incr count *)
+   | Some idx0, Some idx1 ->
+     let idx0 = min idx0 idx1
+     and idx1 = max idx0 idx1 in
+     circuits.%(idx0) <- ISet.union circuits.%(idx0) circuits.%(idx1) ;
+     if idx1 = Dynarray.length circuits - 1
+     then Dynarray.remove_last circuits
+     else circuits.%(idx1) <- Dynarray.pop_last circuits)
+ done ;
+
+ let (x0,y0,z0) = input.(!last_a) in
+ let (x1,y1,z1) = input.(!last_b) in
+ if debug then Printf.printf "%d:(%d,%d,%d), %d:(%d,%d,%d)\n" !last_a x0 y0 z0 !last_b x1 y1 z1 ;
+ x0 * x1
