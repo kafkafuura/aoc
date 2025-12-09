@@ -765,3 +765,87 @@ let problem_09b () =
    res := d
  done ;
  !res
+
+(* use winding number; slower because of no short-circuiting, possibly more robust *)
+let problem_09b2 () =
+ let example = false in
+ let debug = false in
+
+ let area (y0,x0) (y1,x1) =
+  (abs (y0 - y1) + 1) *
+  (abs (x0 - x1) + 1) in
+
+ let ylines = Dynarray.create () in
+ let xlines = Dynarray.create () in
+
+ let catalog_line (y0,x0) (y1,x1) =
+  if y0 = y1
+  then Dynarray.add_last ylines (y0, min x0 x1, max x0 x1, compare (x1-x0) 0)
+  else Dynarray.add_last xlines (x0, min y0 y1, max y0 y1, compare (y1-y0) 0) in
+
+ let input =
+  In_channel.(with_open_bin (if example then "09e.txt" else "09.txt") input_lines) |>
+  List.map (fun s -> Scanf.sscanf s "%d,%d" (fun a b -> b,a)) |>
+  Array.of_list in
+
+ for i = 0 to Array.length input - 2 do
+  catalog_line input.(i) input.(i+1)
+ done ;
+ catalog_line input.(Array.length input - 1) input.(0)  ;
+
+ let ylines = Dynarray.to_array ylines in
+ let xlines = Dynarray.to_array xlines in
+
+ (* use a half-winding number to represent entering an edge *)
+ (* figuring this out took forever *)
+ let winding_yx (y,x',x'') (x,y',y'',w) =
+  if not (x >= x' && x <= x'') then 0 else
+  if y = y' || y = y'' then w else
+  if y > y' && y < y'' then w lsl 1 else 0 in
+
+ let intersects_within_yx (y,x',x'') (x,y',y'',_) = y > y' && y < y'' && x > x' && x < x'' in
+
+ let module Heap = Pqueue.MakeMin(struct type t = int * int * int let compare (a,b,c) (d,e,f) = compare (~-a,b,c) (~-d,e,f) end) in
+ let areas = Heap.create () in
+ for i = 0 to Array.length input - 2 do
+  for j = i+1 to Array.length input - 1 do
+   Heap.add areas (area input.(i) input.(j), i, j)
+  done
+ done ;
+
+ (* in order to be valid, all four corners must reside within the polygon and...
+    no sides of the area may intersect within the polygon's sides (touching is fine) *)
+ let res = ref 0 in
+ while !res = 0 do
+  let (d,i,j) = Heap.pop_min areas |> Option.get in
+  let (y0,x0) = input.(i) in
+  let (y1,x1) = input.(j) in
+  if
+   (* test whether all corners (and center) are valid by removing all valid cases and testing against [] *)
+   ([min y0 y1, min x0 x1
+    ;min y0 y1, max x0 x1
+    ;max y0 y1, min x0 x1
+    ;max y0 y1, max x0 x1
+    (* check center to prevent edge case where all points lie on the polygon but the rect is still outside *)
+    ;(y0+y1)/2, (x0+x1)/2] |>
+    (* skip corners we already know are valid points *)
+    List.filter (fun p -> p <> input.(i) && p <> input.(j)) |>
+    (* check specialized winding number *)
+    List.filter (fun (y,x) ->
+     (Array.fold_left (fun a xline -> a + (winding_yx (y,x,Int.max_int) xline)) 0 xlines = 0)) |>
+    ((=)[])) &&
+   (* test whether the rectangle we draw is valid; i.e., it does not cross that pesky inner cutout *)
+   (let sideN = (min y0 y1, min x0 x1, max x0 x1) in
+    let sideS = (max y0 y1, min x0 x1, max x0 x1) in
+    let sideW = (min x0 x1, min y0 y1, max y0 y1) in
+    let sideE = (max x0 x1, min y0 x1, max y0 y1) in
+    not
+    (Array.exists (intersects_within_yx sideN) xlines ||
+     Array.exists (intersects_within_yx sideS) xlines ||
+     Array.exists (intersects_within_yx sideW) ylines ||
+     Array.exists (intersects_within_yx sideE) ylines))
+  then
+   let _ = if debug then Printf.printf "(%d,%d), (%d,%d)\n" y0 x0 y1 x1 else () in
+   res := d
+ done ;
+ !res
