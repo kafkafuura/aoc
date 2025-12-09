@@ -654,3 +654,114 @@ let problem_08b () =
  let (x1,y1,z1) = input.(!last_b) in
  if debug then Printf.printf "%d:(%d,%d,%d), %d:(%d,%d,%d)\n" !last_a x0 y0 z0 !last_b x1 y1 z1 ;
  x0 * x1
+
+(* brute-force search will work for part a *)
+let problem_09a () =
+ let example = false in
+
+ let area (y0,x0) (y1,x1) =
+  (abs (y0 - y1) + 1) *
+  (abs (x0 - x1) + 1) in
+
+ let input =
+  In_channel.(with_open_bin (if example then "09e.txt" else "09.txt") input_lines) |>
+  List.map (fun s -> Scanf.sscanf s "%d,%d" (fun a b -> a,b)) |>
+  Array.of_list in
+
+ let res = ref 0 in
+ for i = 0 to Array.length input - 2 do
+  for j = i+1 to Array.length input - 1 do
+   res := max !res (area input.(i) input.(j))
+  done
+ done ;
+ !res
+
+(* not very efficient, but it works *)
+let problem_09b () =
+ let example = false in
+ let debug = true in
+
+ let area (y0,x0) (y1,x1) =
+  (abs (y0 - y1) + 1) *
+  (abs (x0 - x1) + 1) in
+
+ let ylines = Dynarray.create () in
+ let xlines = Dynarray.create () in
+
+ let catalog_line (y0,x0) (y1,x1) =
+  if y0 = y1
+  then Dynarray.add_last ylines (y0, min x0 x1, max x0 x1)
+  else Dynarray.add_last xlines (x0, min y0 y1, max y0 y1) in
+
+ let input =
+  In_channel.(with_open_bin (if example then "09e.txt" else "09.txt") input_lines) |>
+  List.map (fun s -> Scanf.sscanf s "%d,%d" (fun a b -> b,a)) |>
+  Array.of_list in
+
+ for i = 0 to Array.length input - 2 do
+  catalog_line input.(i) input.(i+1)
+ done ;
+ catalog_line input.(0) input.(Array.length input - 1) ;
+
+ let ylines = Dynarray.to_array ylines in
+ let xlines = Dynarray.to_array xlines in
+
+ (* a binary search-based Array.exists could probably speed things up... *)
+ Array.sort compare ylines ;
+ Array.sort compare xlines ;
+
+ let intersects_yx (y,x',x'') (x,y',y'') = y >= y' && y <= y'' && x >= x' && x <= x'' in
+ let intersects_within_yx (y,x',x'') (x,y',y'') = y > y' && y < y'' && x > x' && x < x'' in
+
+ let module Heap = Pqueue.MakeMin(struct type t = int * int * int let compare (a,b,c) (d,e,f) = compare (~-a,b,c) (~-d,e,f) end) in
+ let areas = Heap.create () in
+ for i = 0 to Array.length input - 2 do
+  for j = i+1 to Array.length input - 1 do
+   Heap.add areas (area input.(i) input.(j), i, j)
+  done
+ done ;
+
+ (* in order to be valid, all four corners must reside within the polygon and...
+    no sides of the area may intersect within the polygon's sides (touching is fine) *)
+ let res = ref 0 in
+ while !res = 0 do
+  let (d,i,j) = Heap.pop_min areas |> Option.get in
+  let (y0,x0) = input.(i) in
+  let (y1,x1) = input.(j) in
+  if
+   (* test whether all corners are valid by removing all valid cases and testing against [] *)
+   ([min y0 y1, min x0 x1
+    ;min y0 y1, max x0 x1
+    ;max y0 y1, min x0 x1
+    ;max y0 y1, max x0 x1] |>
+    (* skip corners we already know are valid points *)
+    List.filter (fun p -> p <> input.(i) && p <> input.(j)) |>
+    (* a point is inside if we can cannot draw an infinite NSWE ray that intersects no lines *)
+    List.filter (fun (y,x) ->
+     let rayN = (x,Int.min_int,y) in
+     let rayS = (x,y,Int.max_int) in
+     let rayW = (y,Int.min_int,x) in
+     let rayE = (y,x,Int.max_int) in
+     not
+     ((Array.exists (intersects_yx rayE) xlines) &&
+      (Array.exists (intersects_yx rayW) xlines) &&
+      (Array.exists (intersects_yx rayN) ylines) &&
+      (Array.exists (intersects_yx rayS) ylines))) |>
+    ((=)[])) &&
+   (* test whether the rectangle we draw is valid; i.e., it does not cross that pesky inner cutout *)
+   (
+    let sideN = (min y0 y1, min x0 x1, max x0 x1) in
+    let sideS = (max y0 y1, min x0 x1, max x0 x1) in
+    let sideW = (min x0 x1, min y0 y1, max y0 y1) in
+    let sideE = (max x0 x1, min y0 x1, max y0 y1) in
+    not
+    (Array.exists (intersects_within_yx sideN) xlines ||
+     Array.exists (intersects_within_yx sideS) xlines ||
+     Array.exists (intersects_within_yx sideW) ylines ||
+     Array.exists (intersects_within_yx sideE) ylines)
+   )
+  then
+   let _ = if debug then Printf.printf "(%d,%d), (%d,%d)\n" y0 x0 y1 x1 else () in
+   res := d
+ done ;
+ !res
