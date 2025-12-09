@@ -821,6 +821,16 @@ let problem_09b2 () =
   let (y0,x0) = input.(i) in
   let (y1,x1) = input.(j) in
   if
+   (* test whether the rectangle we draw is valid; i.e., it does not cross that pesky inner cutout *)
+   (let sideN = (min y0 y1, min x0 x1, max x0 x1) in
+    let sideS = (max y0 y1, min x0 x1, max x0 x1) in
+    let sideW = (min x0 x1, min y0 y1, max y0 y1) in
+    let sideE = (max x0 x1, min y0 x1, max y0 y1) in
+    not
+    (Array.exists (intersects_within_yx sideN) xlines ||
+     Array.exists (intersects_within_yx sideS) xlines ||
+     Array.exists (intersects_within_yx sideW) ylines ||
+     Array.exists (intersects_within_yx sideE) ylines)) &&
    (* test whether all corners (and center) are valid by removing all valid cases and testing against [] *)
    ([min y0 y1, min x0 x1
     ;min y0 y1, max x0 x1
@@ -833,17 +843,7 @@ let problem_09b2 () =
     (* check specialized winding number *)
     List.filter (fun (y,x) ->
      (Array.fold_left (fun a xline -> a + (winding_yx (y,x,Int.max_int) xline)) 0 xlines = 0)) |>
-    ((=)[])) &&
-   (* test whether the rectangle we draw is valid; i.e., it does not cross that pesky inner cutout *)
-   (let sideN = (min y0 y1, min x0 x1, max x0 x1) in
-    let sideS = (max y0 y1, min x0 x1, max x0 x1) in
-    let sideW = (min x0 x1, min y0 y1, max y0 y1) in
-    let sideE = (max x0 x1, min y0 x1, max y0 y1) in
-    not
-    (Array.exists (intersects_within_yx sideN) xlines ||
-     Array.exists (intersects_within_yx sideS) xlines ||
-     Array.exists (intersects_within_yx sideW) ylines ||
-     Array.exists (intersects_within_yx sideE) ylines))
+    ((=)[]))
   then
    let _ = if debug then Printf.printf "(%d,%d), (%d,%d)\n" y0 x0 y1 x1 else () in
    res := d
