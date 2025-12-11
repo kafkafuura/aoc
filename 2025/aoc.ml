@@ -849,3 +849,236 @@ let problem_09b2 () =
    res := d
  done ;
  !res
+
+(* ignore the joltage requirements *)
+(* try to find the minimum number of presses to solve the puzzle, per line *)
+(* because of the nature of the toggles, ORDER does not matter! *)
+(* only odd or even presses matter, because pressing a button twice undoes everything! *)
+(* use a bfs to search the minimum path length! *)
+let problem_10a () =
+ let example = false in
+ let module Lock = struct
+  type t = {target : int; scope : int ; buttons : int list}
+  let solve t =
+   let state_map = Array.make (1 lsl t.scope) Int.max_int in
+   state_map.(0) <- 0 ;
+   let q =
+    t.buttons |> List.to_seq |> Seq.map (fun b -> (0,0,b)) |> Queue.of_seq in
+   (* bfs *)
+   while state_map.(t.target) = Int.max_int do
+    let (n, state, button) = Queue.take q in
+    let state' = button lxor state in
+    if state_map.(state') > n + 1 then (
+     state_map.(state') <- n + 1 ;
+     t.buttons |> List.to_seq |> Seq.map (fun b -> (n+1,state',b)) |> Queue.add_seq q
+    ) else ()
+   done ;
+   state_map.(t.target)
+  let of_string s =
+   let blocks = String.split_on_char ' ' s in
+   let (target_s, blocks) = (match blocks with hd :: tl -> hd, tl | _ -> assert false) in
+   let target_s = String.sub target_s 1 (String.length target_s - 2) in
+   let scope = String.length target_s in
+   let target = String.fold_right (fun c a -> (a lsl 1) + (if c = '#' then 1 else 0)) target_s 0 in
+   let button_of_string s =
+    String.sub s 1 (String.length s - 2) |> String.split_on_char ',' |>
+    List.map int_of_string |>
+    List.fold_left (fun a n -> a + (1 lsl n)) 0 in
+   let buttons =
+    blocks |>
+    List.take_while (fun s -> s.[0] = '(') |>
+    List.map button_of_string in
+  {target;scope;buttons}
+ end in
+ let input =
+  In_channel.(with_open_bin (if example then "10e.txt" else "10.txt") input_lines) |>
+  List.map Lock.of_string in
+ List.map Lock.solve input |>
+ List.fold_left (+) 0
+
+(* now we're ignoring the indicator lights *)
+(* try first without forcing optimizations *)
+(* 10 dimensions is too high! *)
+(* THIS DOES NOT WORK *)
+let problem_10b () =
+ let example = true in
+ let module ISet = Set.Make(Int) in
+ let module Lock = struct
+  type t = {target : int list; buttons : ISet.t list}
+  let htbl = Hashtbl.create 8192
+
+  let solve t =
+   Hashtbl.clear htbl ;
+   let null_state = Seq.repeat 0 |> Seq.take (List.length t.target) |> List.of_seq in
+   let q =
+    t.buttons |> List.to_seq |> Seq.map (fun b -> (0,null_state,b)) |> Queue.of_seq in
+   (* bfs *)
+   while not @@ Hashtbl.mem htbl t.target do
+    let (n, state, button) = Queue.take q in
+    let state' = List.mapi (fun i x -> if ISet.mem i button then succ x else x) state in
+    if not (Hashtbl.mem htbl state') then (
+     Hashtbl.add htbl state' (n+1) ;
+     t.buttons |> List.to_seq |> Seq.map (fun b -> (n+1,state',b)) |> Queue.add_seq q
+    ) else ()
+   done ;
+   Hashtbl.find htbl t.target
+
+  let of_string s =
+   let blocks = String.split_on_char ' ' s in
+   let blocks = List.rev (List.tl blocks) in
+   let (target_s, blocks) = (match blocks with hd :: tl -> hd, tl | _ -> assert false) in
+   let target_s = String.sub target_s 1 (String.length target_s - 2) in
+   let target = target_s |> String.split_on_char ',' |> List.map int_of_string in
+   let buttons =
+    List.map
+    (fun s ->
+     String.sub s 1 (String.length s - 2) |> String.split_on_char ',' |>
+     List.map int_of_string |> ISet.of_list) blocks in
+  {target;buttons}
+
+ end in
+
+ let input =
+  In_channel.(with_open_bin (if example then "10e.txt" else "10.txt") input_lines) |>
+  List.map Lock.of_string in
+ List.map Lock.solve input |>
+ List.fold_left (+) 0
+
+(* uses massive amounts of memory but can solve ~40% of the lines in a reasonable amount of time *)
+(* still fails on full input, due to memory issues after about 30min ~ 1 hr *)
+(* z3 solver works and there are ocaml bindings for it, but this is stdlib only *)
+(* THIS DOES NOT WORK *)
+let problem_10b2 () =
+ let example = false in
+ let module ISet = Set.Make(Int) in
+ let module Heap = Pqueue.MakeMin(struct type t = int * int array * int * ISet.t let compare (a,b,c,d) (e,f,g,h) = compare (~-c,a) (~-g,e) end) in
+ let module Lock = struct
+  type t = {target : int array; buttons : ISet.t list}
+  let htbl = Hashtbl.create 8192
+
+  let solve t =
+   Hashtbl.reset htbl ;
+   let null_state = Seq.repeat 0 |> Seq.take (Array.length t.target) |> Array.of_seq in
+   let q =
+    t.buttons |> List.map (fun b -> (0,null_state, ISet.cardinal b, b)) |> Heap.of_iter List.iter in
+   (* bfs *)
+   while not @@ Hashtbl.mem htbl t.target do
+    let (n, state, bsize, button) = Heap.pop_min q |> Option.get in
+    let state' = Array.mapi (fun i x -> if ISet.mem i button then succ x else x) state in
+    if Array.exists2 (>) state' t.target then () else
+    if not (Hashtbl.mem htbl state') then (
+     Hashtbl.add htbl state' (n+1) ;
+     t.buttons |> List.map (fun b -> (n+1,state', ISet.cardinal b,b)) |> Heap.add_iter q List.iter
+    ) else ()
+   done ;
+   let res = Hashtbl.find htbl t.target in
+   print_int res ; print_newline () ; res
+
+  let of_string s =
+   let blocks = String.split_on_char ' ' s in
+   let blocks = List.rev (List.tl blocks) in
+   let (target_s, blocks) = (match blocks with hd :: tl -> hd, tl | _ -> assert false) in
+   let target_s = String.sub target_s 1 (String.length target_s - 2) in
+   let target = target_s |> String.split_on_char ',' |> List.map int_of_string |> Array.of_list in
+   let buttons =
+    List.map
+    (fun s ->
+     String.sub s 1 (String.length s - 2) |> String.split_on_char ',' |>
+     List.map int_of_string |> ISet.of_list) blocks in
+  {target;buttons}
+
+ end in
+
+ let input =
+  In_channel.(with_open_bin (if example then "10e.txt" else "10.txt") input_lines) |>
+  List.map Lock.of_string in
+ input |>
+ List.map Lock.solve |>
+ List.fold_left (+) 0
+
+(* directional graph *)
+let problem_11a () =
+ let example = false in
+ let hash_code s =
+  assert (String.length s = 3) ;
+  (Char.code s.[2] lsl 16) + (Char.code s.[1] lsl 8) + (Char.code s.[0]) in
+(*
+ let s_of_hc x =
+  let b = Buffer.create 3 in
+  Buffer.add_char b (Char.chr (x land 0xFF)) ;
+  Buffer.add_char b (Char.chr ((x land 0xFF00) lsr 8)) ;
+  Buffer.add_char b (Char.chr ((x land 0xFF0000) lsr 16)) ;
+  Buffer.contents b in
+*)
+
+ let module IMap = Map.Make(Int) in
+
+ let graph = ref IMap.empty in
+
+ In_channel.(with_open_bin (if example then "11e.txt" else "11.txt") input_lines) |>
+ List.iter
+ (fun s ->
+ let (p,cs) =
+  (match String.split_on_char ':' s with
+  | parent :: children :: [] ->
+    hash_code parent, (List.sort compare (children |> String.split_on_char ' ' |> List.filter ((<>)"") |> List.map hash_code))
+  | _ -> raise_notrace (Invalid_argument "Invalid Input Line: no ':'")) in
+ graph := IMap.add p cs !graph) ;
+
+ let graph = IMap.add (hash_code "out") [] !graph in
+
+ let cache = ref @@ IMap.singleton (hash_code "out") 1 in
+ let rec dfs node =
+  match IMap.find_opt node !cache with
+  | Some n -> n
+  | None ->
+    let res = List.fold_left (fun a node -> a + dfs node) 0 (IMap.find node graph) in
+    cache := IMap.add node res !cache ; res in
+
+ dfs (hash_code "you")
+
+let problem_11b () =
+ let example = false in
+ let hash_code s =
+  assert (String.length s = 3) ;
+  (Char.code s.[2] lsl 16) + (Char.code s.[1] lsl 8) + (Char.code s.[0]) in
+
+ let module IMap = Map.Make(Int) in
+
+ let graph = ref IMap.empty in
+
+ In_channel.(with_open_bin (if example then "11e.txt" else "11.txt") input_lines) |>
+ List.iter
+ (fun s ->
+ let (p,cs) =
+  (match String.split_on_char ':' s with
+  | parent :: children :: [] ->
+    hash_code parent, (List.sort compare (children |> String.split_on_char ' ' |> List.filter ((<>)"") |> List.map hash_code))
+  | _ -> raise_notrace (Invalid_argument "Invalid Input Line: no ':'")) in
+ graph := IMap.add p cs !graph) ;
+
+ let graph = IMap.add (hash_code "out") [] !graph in
+
+ let paths src dst graph =
+  let cache = ref @@ IMap.singleton (hash_code dst) 1 in
+  let rec dfs node =
+   match IMap.find_opt node !cache with
+   | Some n -> n
+   | None ->
+     let res = List.fold_left (fun a node -> a + dfs node) 0 (IMap.find node graph) in
+     cache := IMap.add node res !cache ; res in
+  dfs (hash_code src) in
+
+ if paths "dac" "fft" graph = 0 then (
+  let a = paths "svr" "fft" graph in
+  let b = paths "fft" "dac" graph in
+  let c = paths "dac" "out" graph in
+  Printf.printf "%d, %d, %d\n" a b c ;
+  a * b * c
+ ) else (
+  let a = paths "svr" "dac" graph in
+  let b = paths "dac" "fft" graph in
+  let c = paths "fft" "out" graph in
+  Printf.printf "%d, %d, %d\n" a b c ;
+  a * b * c
+ )
